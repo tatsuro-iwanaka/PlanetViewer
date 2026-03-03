@@ -14,7 +14,7 @@ Observation sites:
 
 <img width="1589" height="1059" alt="Image" src="https://github.com/user-attachments/assets/c1767e16-6c9c-4532-879c-d8c9565c783c" />
 
-### This software uses SPICE toolkit.
+## This software uses SPICE toolkit.
 -Acton, C.H.; "Ancillary Data Services of NASA's Navigation and Ancillary Information Facility;" Planetary and Space Science, Vol. 44, No. 1, pp. 65-70, 1996.
 DOI 10.1016/0032-0633(95)00107-7
 -Charles Acton, Nathaniel Bachman, Boris Semenov, Edward Wright; A look toward the future in the handling of space science mission geometry; Planetary and Space Science (2017);
