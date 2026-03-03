@@ -12,6 +12,9 @@ Observation sites:
   - R-CCS, Kobe
   - ALMA, Chile
 
+Kernel list is specified in `kernels.tm`. Download them from `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/`.
+Make directory `spice_kernel` and put these kernels into this directory.
+
 <img width="1589" height="1059" alt="Image" src="https://github.com/user-attachments/assets/c1767e16-6c9c-4532-879c-d8c9565c783c" />
 
 ### This software uses SPICE toolkit.
