@@ -1,4 +1,4 @@
-#PlanetViewer: Planetary Observation Planner.
+## PlanetViewer: Planetary Observation Planner.
 
 Simulate the disk views of Mercury, Venus, Mars and Jupiter from the Earth.
 
