@@ -5,12 +5,14 @@ Simulate the disk views of Mercury, Venus, Mars and Jupiter from the Earth.
 Range of calculation date: Jan 1, 1970 to Dec 31, 2120
 
 Observation sites:
-  - IRTF, Mauna Kea
-  - T60, Haleakala
-  - NAOJ, Miatka
-  - Tohoku U., Sendai
-  - R-CCS, Kobe
-  - ALMA, Chile
+  - IRTF, Mauna Kea, Hawai
+  - T60, Haleakala, Hawai
+  - NAOJ, Miatka, Tokyo
+  - Tohoku U., Sendai, Miyagi
+  - R-CCS, Kobe, Hyogo
+  - ALMA, Atacama, Chile
+  - Subaru, Mauna Kea, Hawai
+  - Sendai Observatory, Sendai, Miyagi
 
 Kernel list is specified in `kernels.tm`. 
 Download them from `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/`.
