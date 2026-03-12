@@ -23,9 +23,9 @@ Make `spice_kernel` directory and put these kernels into this directory.
 
 <img width="1589" height="1059" alt="Image" src="https://private-user-images.githubusercontent.com/136674384/562076273-462cdbc8-6e1c-4f83-b9b5-17d24a6b078d.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzMzMDA3MjMsIm5iZiI6MTc3MzMwMDQyMywicGF0aCI6Ii8xMzY2NzQzODQvNTYyMDc2MjczLTQ2MmNkYmM4LTZlMWMtNGY4My1iOWI1LTE3ZDI0YTZiMDc4ZC5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwMzEyJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDMxMlQwNzI3MDNaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT0yOGE2OTJjMWIyMjFjOWVlZmFkODM1NGU0MTZlYjAzZjhhNjk3MmM1MTA1MDA3ZmY3NGU0MTNiMmU4ZTc5ZGY3JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.N6yuoM6JV2jCVJHsi2ZVGRDaUJGChXX5a-A8bS69rB4" />
 
-### Ver1
+### Ver 1.0
 
-### Ver2
+### Ver 2.0
   - Fixed crash when simulation time is out of range
   - Added Jupiter's Galilean Moons
   - Added Saturn and its rings
