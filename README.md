@@ -2,9 +2,9 @@
 
 Simulate the disk views of Mercury, Venus, Mars and Jupiter from the Earth.
 
-Range of calculation date: Jan 1, 1970 to Dec 31, 2120
+### Range of calculation date: Jan 1, 1970 to Dec 31, 2120
 
-Observation sites:
+### Observation sites:
   - IRTF, Mauna Kea, Hawai
   - T60, Haleakala, Hawai
   - NAOJ, Miatka, Tokyo
@@ -13,6 +13,14 @@ Observation sites:
   - ALMA, Atacama, Chile
   - Subaru, Mauna Kea, Hawai
   - Sendai Observatory, Sendai, Miyagi
+
+### Observation Targets
+  - Mercury
+  - Venus
+  - Mars
+  - Jupiter
+  - Saturn
+  - Jupiter's Galilean Moons
 
 Kernel list is specified in `kernels.tm`. 
 Download them from `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/`.
