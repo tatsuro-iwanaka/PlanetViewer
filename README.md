@@ -24,6 +24,7 @@ Simulate the disk views of Mercury, Venus, Mars and Jupiter from the Earth.
 
 ### For Mac users
 Compiled for Apple Silicon and MacOS > 11.0
+
 Download from [Google Drive](https://drive.google.com/file/d/1SRF5qeCKQDxIFlAKpVGSnvGciX-jdLLP/view?usp=sharing "Planet View")
 
 ### Ver 1.0
