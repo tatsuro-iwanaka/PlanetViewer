@@ -2,7 +2,9 @@
 
 Simulate the disk views of Mercury, Venus, Mars and Jupiter from the Earth.
 
-<img width="1598" height="526" alt="Image" src="https://github.com/user-attachments/assets/6e6aeede-35bc-4be7-9e83-fd8bf87ee405" />
+<img width="1584" height="1024" alt="Image" src="https://github.com/user-attachments/assets/2a6e73d8-5266-47ef-b558-0e6b8c59927c" />
+<img width="1585" height="1023" alt="Image" src="https://github.com/user-attachments/assets/bb4a63e7-0b86-453b-b78b-a9f7f2f962cf" />
+<img width="1586" height="1023" alt="Image" src="https://github.com/user-attachments/assets/936d9142-c696-45f7-bca5-71a4c0a941bb" />
 
 #### For Mac users
 Compiled for Apple Silicon and MacOS > 11.0  
