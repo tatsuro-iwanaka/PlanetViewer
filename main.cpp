@@ -142,22 +142,10 @@ struct ObservationData
 	bool prev_lon = true;
 	bool prev_lt = true;
 	bool prev_ol = true;
-	
-	// double ring_shadow_lat;
-	// float  ring_outer_r_km = 136780.0f;
-	// float  ring_inner_r_km = 92000.0f;
 
-	// double ring_b_earth;    // 地球から見た環の傾斜角 (B) [rad]
-	// double ring_b_sun;      // 太陽から見た環の傾斜角 (B') [rad]
-	// double ring_sun_az;     // 土星面内での太陽の方位角 (影の方向) [rad]
-	
-	// bool show_rings = true;
-	// float ring_outer_r_factor = 2.27f; // A環外縁 (136780 / 60268)
-	// float ring_inner_r_factor = 1.53f; // B環内縁 (92000 / 60268)
-
-	double m_p2j[3][3];       // 惑星固定枠 -> J2000 変換行列
-	double v_np_j2k[3];       // J2000における惑星の北極ベクトル
-	double sun_dir_j2k[3];    // J2000における太陽方向（単位ベクトル）
+	double m_p2j[3][3];
+	double v_np_j2k[3];
+	double sun_dir_j2k[3];
 };
 
 struct TZ
