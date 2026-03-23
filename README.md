@@ -8,7 +8,7 @@ Simulate the disk views of Mercury, Venus, Mars, Jupiter and Saturn from the Ear
 
 #### For Mac users
 Compiled for Apple Silicon and MacOS > 11.0  
-Download from [Google Drive](https://drive.google.com/file/d/1SRF5qeCKQDxIFlAKpVGSnvGciX-jdLLP/view?usp=sharing "Planet View")  
+Download from [Google Drive](https://drive.google.com/file/d/1zmyvnSbiS8W9kSEtoAxOJdEL8b5NWmsa/view?usp=sharing "Planet View")  
 and allow to excute by `xattr -cr PlanetViewer.app`
 
 ### Range of calculation date
