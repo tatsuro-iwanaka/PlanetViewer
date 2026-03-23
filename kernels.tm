@@ -5,6 +5,8 @@
 		'spice_kernel/earth_latest_high_prec.bpc',
 		'spice_kernel/earth_2025_250826_2125_predict.bpc',
 		'spice_kernel/earth_1962_250826_2125_combined.bpc',
-		'spice_kernel/de442.bsp'
+		'spice_kernel/de442.bsp',
+		'spice_kernel/gm_de440.tpc',
+		'spice_kernel/jup365_subset.bsp'
 	)
 \begintext
