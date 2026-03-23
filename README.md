@@ -40,6 +40,9 @@ Jan 1, 1970 to Dec 31, 2120
   - Added Martian Solar Longitude, Ls
   - Added Sub-Solar and Sub-Earth longitude/latitude
 
+### Ver 2.1
+  - Displaying Planets considering flattening
+
 Kernel list is specified in `kernels.tm`. 
 Download them from `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/`.
 
