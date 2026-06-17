@@ -2,6 +2,8 @@
 
 Simulate the disk views of Mercury, Venus, Mars, Jupiter and Saturn from the Earth.
 
+Download from the releases and `xattr -cr PlanetViewer.app` to run.
+
 For Windows users go to [PlanetViewerWindows](https://github.com/tatsuro-iwanaka/PlanetViewerWindows).
 
 <p>
