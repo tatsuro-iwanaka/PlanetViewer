@@ -18,12 +18,23 @@
 
 #include "chronoflux.hpp"
 
+#include <opencv2/opencv.hpp>
+
+#include "portable-file-dialogs.h"
+
+#ifdef __APPLE__
 #include <mach-o/dyld.h>
 #include <libgen.h>
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#include <direct.h>
+#define chdir _chdir
+#endif
 
-void SetupMacOSBundlePath()
+void SetupEnvironmentPath()
 {
+#ifdef __APPLE__
 	char path[1024];
 	uint32_t size = sizeof(path);
 	if(_NSGetExecutablePath(path, &size) == 0)
@@ -33,7 +44,22 @@ void SetupMacOSBundlePath()
 		std::string res_path = std::string(exec_dir) + "/../Resources";
 		chdir(res_path.c_str());
 	}
+#endif
+	// Windows環境では作業ディレクトリの強制変更をスキップ
 }
+
+// void SetupMacOSBundlePath()
+// {
+// 	char path[1024];
+// 	uint32_t size = sizeof(path);
+// 	if(_NSGetExecutablePath(path, &size) == 0)
+// 	{
+// 		char* exec_dir = dirname(path);
+		
+// 		std::string res_path = std::string(exec_dir) + "/../Resources";
+// 		chdir(res_path.c_str());
+// 	}
+// }
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -143,9 +169,25 @@ struct ObservationData
 	bool prev_lt = true;
 	bool prev_ol = true;
 
-	double m_p2j[3][3];
-	double v_np_j2k[3];
-	double sun_dir_j2k[3];
+	double m_p2j[3][3];       // 惑星固定枠 -> J2000 変換行列
+	double v_np_j2k[3];       // J2000における惑星の北極ベクトル
+	double sun_dir_j2k[3];    // J2000における太陽方向（単位ベクトル）
+
+	// ---- 出力ファイル専用の設定パラメータを追加 ----
+	ImVec4 out_lat_color = ImVec4(1.0f, 0.0f, 0.0f, 0.94f);      // 緯度線（デフォルト：赤）
+	ImVec4 out_lon_color = ImVec4(1.0f, 0.0f, 0.0f, 0.94f);      // 経度線（デフォルト：赤）
+	ImVec4 out_lst_color = ImVec4(0.96f, 0.51f, 0.13f, 0.94f);   // LST線 （デフォルト：オレンジ）
+	ImVec4 out_outline_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);   // 輪郭線（デフォルト：輝度70%グレー）
+
+	float out_lat_thick = 1.0f;
+	float out_lon_thick = 1.0f;
+	float out_lst_thick = 1.0f;
+	float out_outline_thick = 1.0f;
+
+	bool out_show_latitude = true;
+	bool out_show_longitude = true;
+	bool out_show_local_time = true;
+	bool out_show_outline = true;
 };
 
 struct TZ
@@ -1934,6 +1976,293 @@ template<typename AddFunc> bool TimeFieldWithButtons(const char* label, int* val
 	return changed;
 }
 
+std::string getTimestampedFileName(const std::string& prefix, const std::string& extension)
+{
+	std::time_t now = std::time(nullptr);
+	std::tm* tstruct = std::localtime(&now);
+	char buf[80];
+	std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", tstruct);
+	return prefix + "_" + std::string(buf) + extension;
+}
+
+void saveScreenshot(GLFWwindow* window, int width, int height, const std::string& filename)
+{
+	cv::Mat image(height, width, CV_8UC3);
+	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, image.data);
+
+	cv::flip(image, image, 0);
+	cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+
+	if (cv::imwrite(filename, image))
+	{
+		std::cout << "Screenshot saved to: " << filename << std::endl;
+	}
+	else
+	{
+		std::cerr << "Failed to save screenshot: " << filename << std::endl;
+	}
+}
+
+void saveGridOverlay(ObservationData& d, int width, int height, const std::string& filename)
+{
+    const BodyConsts& body = bodies[d.target_index];
+    cv::Mat image = cv::Mat::zeros(height, width, CV_8UC4);
+
+    float center_x = width * 0.5f;
+    float center_y = height * 0.5f;
+    const float R_base = 450.0f;
+    float scale = 1.0f;
+
+    // if (d.show_moons && d.target_index == 3)
+    // {
+    //  scale = (float)(bodies[d.target_index].re / 1800000.0);
+    // }
+    // else if (d.target_index == 4)
+    // {
+    //  scale = 0.7f;
+    // }
+    float R = R_base * scale;
+
+    // ---- 固定小数点サブピクセル制御用パラメータ ----
+    const int shift = 4;                                    // 4ビットシフト（1/16ピクセル精度）
+    const float factor = static_cast<float>(1 << shift);    // 16.0f
+
+    auto draw_cv_line = [&](const ImVec2* pts, int count, cv::Scalar color, int thickness)
+    {
+        for (int i = 0; i < count - 1; ++i)
+        {
+            if ((pts[i].x != 0.0f || pts[i].y != 0.0f) && (pts[i+1].x != 0.0f || pts[i+1].y != 0.0f))
+            {
+                // 座標値を16倍し、四捨五入して整数型に格納
+                cv::Point p1(
+                    static_cast<int>(std::round((center_x + pts[i].x * R) * factor)),
+                    static_cast<int>(std::round((center_y - pts[i].y * R) * factor))
+                );
+                cv::Point p2(
+                    static_cast<int>(std::round((center_x + pts[i+1].x * R) * factor)),
+                    static_cast<int>(std::round((center_y - pts[i+1].y * R) * factor))
+                );
+                
+                // 第7引数にshiftを明示的に渡すことで、サブピクセル精度アンチエイリアスを有効化
+                cv::line(image, p1, p2, color, thickness, cv::LINE_AA, shift);
+            }
+        }
+    };
+
+    // 1. 緯度線 (出力用フラグで判定)
+    if (d.out_show_latitude)
+    {
+        cv::Scalar col(d.out_lat_color.z * 255, d.out_lat_color.y * 255, d.out_lat_color.x * 255, d.out_lat_color.w * 255);
+        for (int h = 0; h < 5; ++h)
+        {
+            int thick = static_cast<int>(d.out_lat_thick * 2.0 + 0.5f);
+            draw_cv_line(d.lat_pts[h], 100, col, std::max(1, thick));
+        }
+    }
+
+    // 2. 地方時（LST）線 (出力用フラグで判定)
+    if (d.out_show_local_time)
+    {
+        cv::Scalar col(d.out_lst_color.z * 255, d.out_lst_color.y * 255, d.out_lst_color.x * 255, d.out_lst_color.w * 255);
+        for (int h = 0; h < 12; ++h)
+		{
+            int thick = static_cast<int>(d.out_lst_thick * 2.0 + 0.5f);
+            draw_cv_line(d.lt_mer_pts[h], 100, col, std::max(1, thick));
+        }
+    }
+
+    // 3. 経度線 (出力用フラグで判定)
+    if (d.out_show_longitude)
+    {
+        cv::Scalar col(d.out_lon_color.z * 255, d.out_lon_color.y * 255, d.out_lon_color.x * 255, d.out_lon_color.w * 255);
+        int thick = static_cast<int>(d.out_lon_thick * 2.0 + 0.5f);
+        for (int l = 0; l < 12; ++l)
+        {
+            draw_cv_line(d.lon_pts[l], 100, col, std::max(1, thick));
+        }
+    }
+
+    // 4. アウトライン (出力用フラグで判定)
+    if (d.out_show_outline)
+    {
+        int segments = 512;
+        float phi = (float)(-d.np_angle * rpd_c());
+        float cos_p = cosf(phi), sin_p = sinf(phi);
+        double k = (double)(body.rp / body.re);
+        const float lat_rad = (float)(d.sep_lat * rpd_c());
+        const float Ry = R * sqrtf(cosf(lat_rad)*cosf(lat_rad)*k*k + sinf(lat_rad)*sinf(lat_rad));
+
+        cv::Scalar col(d.out_outline_color.z * 255, d.out_outline_color.y * 255, d.out_outline_color.x * 255, d.out_outline_color.w * 255);
+        int thick = static_cast<int>(d.out_outline_thick * 2.0 + 0.5f);
+
+        for (int i = 0; i < segments; i++)
+        {
+            float theta0 = (float)(twopi_c() * i / (float)segments);
+            float theta1 = (float)(twopi_c() * (i + 1) / (float)segments);
+
+            float x0_l = R * cosf(theta0), y0_l = Ry * sinf(theta0);
+            float x1_l = R * cosf(theta1), y1_l = Ry * sinf(theta1);
+
+            float rx0 = x0_l * cos_p - y0_l * sin_p, ry0 = x0_l * sin_p + y0_l * cos_p;
+            float rx1 = x1_l * cos_p - y1_l * sin_p, ry1 = x1_l * sin_p + y1_l * cos_p;
+
+            // アウトラインの整数変換部も、factor倍の固定小数点演算へ書き換え
+            cv::Point p1(
+                static_cast<int>(std::round((center_x + rx0) * factor)),
+                static_cast<int>(std::round((center_y - ry0) * factor))
+            );
+            cv::Point p2(
+                static_cast<int>(std::round((center_x + rx1) * factor)),
+                static_cast<int>(std::round((center_y - ry1) * factor))
+            );
+            cv::line(image, p1, p2, col, std::max(1, thick), cv::LINE_AA, shift);
+        }
+    }
+
+    if (cv::imwrite(filename, image))
+    {
+        std::cout << "Grid overlay saved to: " << filename << std::endl;
+    }
+    else
+    {
+        std::cerr << "Failed to save grid overlay: " << filename << std::endl;
+    }
+}
+
+void saveGridVector(const ObservationData& d, int width, int height, const std::string& filename)
+{
+	const BodyConsts& body = bodies[d.target_index];
+	std::ofstream ofs(filename);
+	if (!ofs.is_open()) {
+		std::cerr << "Failed to open SVG file: " << filename << std::endl;
+		return;
+	}
+
+	ofs << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
+	ofs << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\" viewBox=\"0 0 " << width << " " << height << "\">\n";
+
+	float center_x = width * 0.5f;
+	float center_y = height * 0.5f;
+	const float R_base = 450.0f;
+	float scale = 1.0f;
+
+	// if (d.show_moons && d.target_index == 3)
+	// {
+	// 	scale = (float)(bodies[d.target_index].re / 1800000.0);
+	// }
+	// else if (d.target_index == 4)
+	// {
+	// 	scale = 0.7f;
+	// }
+	float R = R_base * scale;
+
+	auto to_svg_rgba = [](const ImVec4& col) {
+		char buf[64];
+		std::snprintf(buf, sizeof(buf), "rgba(%d,%d,%d,%.3f)", 
+			static_cast<int>(col.x * 255.0f),
+			static_cast<int>(col.y * 255.0f),
+			static_cast<int>(col.z * 255.0f),
+			col.w);
+		return std::string(buf);
+	};
+
+	std::string lat_col_str = to_svg_rgba(d.out_lat_color);
+	std::string lon_col_str = to_svg_rgba(d.out_lon_color);
+	std::string lst_col_str = to_svg_rgba(d.out_lst_color);
+	std::string outline_col_str = to_svg_rgba(d.out_outline_color);
+
+	auto write_svg_path = [&](const ImVec2* pts, int count, const char* stroke_color, float stroke_width) {
+		bool in_path = false;
+		for (int i = 0; i < count; ++i)
+		{
+			if (pts[i].x != 0.0f || pts[i].y != 0.0f)
+			{
+				float sx = center_x + pts[i].x * R;
+				float sy = center_y - pts[i].y * R;
+
+				if (!in_path)
+				{
+					ofs << "  <path d=\"M " << sx << " " << sy;
+					in_path = true;
+				}
+				else
+				{
+					ofs << " L " << sx << " " << sy;
+				}
+			}
+			else
+			{
+				if (in_path)
+				{
+					ofs << "\" fill=\"none\" stroke=\"" << stroke_color << "\" stroke-width=\"" << stroke_width << "\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n";
+					in_path = false;
+				}
+			}
+		}
+		if (in_path)
+		{
+			ofs << "\" fill=\"none\" stroke=\"" << stroke_color << "\" stroke-width=\"" << stroke_width << "\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n";
+		}
+	};
+
+	// 1. 緯度線 (出力用フラグで判定)
+	if (d.out_show_latitude)
+	{
+		for (int h = 0; h < 5; ++h)
+		{
+			float thick = d.out_lat_thick * 2.0;
+			write_svg_path(d.lat_pts[h], 100, lat_col_str.c_str(), thick);
+		}
+	}
+
+	// 2. 地方時線 (出力用フラグで判定)
+	if (d.out_show_local_time)
+	{
+		for (int h = 0; h < 12; ++h)
+		{
+			int hour = h * 2;
+			float thick = d.out_lst_thick * 2.0;
+			write_svg_path(d.lt_mer_pts[h], 100, lst_col_str.c_str(), thick);
+		}
+	}
+
+	// 3. 経度線 (出力用フラグで判定)
+	if (d.out_show_longitude)
+	{
+		for (int l = 0; l < 12; ++l)
+		{
+			write_svg_path(d.lon_pts[l], 100, lon_col_str.c_str(), d.out_lon_thick * 2.0);
+		}
+	}
+
+	// 4. アウトライン (出力用フラグで判定)
+	if (d.out_show_outline)
+	{
+		int segments = 512;
+		float phi = (float)(-d.np_angle * rpd_c());
+		float cos_p = cosf(phi), sin_p = sinf(phi);
+		double k = (double)(body.rp / body.re);
+		const float lat_rad = (float)(d.sep_lat * rpd_c());
+		const float Ry = R * sqrtf(cosf(lat_rad)*cosf(lat_rad)*k*k + sinf(lat_rad)*sinf(lat_rad));
+
+		ofs << "  <path d=\"";
+		for (int i = 0; i <= segments; i++)
+		{
+			float theta = (float)(twopi_c() * i / (float)segments);
+			float x_l = R * cosf(theta), y_l = Ry * sinf(theta);
+			float rx = x_l * cos_p - y_l * sin_p, ry = x_l * sin_p + y_l * cos_p;
+			float sx = center_x + rx, sy = center_y - ry;
+
+			if (i == 0) ofs << "M " << sx << " " << sy;
+			else ofs << " L " << sx << " " << sy;
+		}
+		ofs << "\" fill=\"none\" stroke=\"" << outline_col_str << "\" stroke-width=\"" << d.out_outline_thick * 2.0 << "\" />\n";
+	}
+
+	ofs << "</svg>\n";
+	ofs.close();
+}
+
 void RenderGUI(ObservationData& d)
 {
 	const BodyConsts& body = bodies[d.target_index];
@@ -2213,6 +2542,240 @@ void RenderGUI(ObservationData& d)
 			SearchSolarAltitudeEvent(d, -18.0, 1, false);
 		}
 
+		ImGui::Separator();
+		ImGui::Text("Output Options");
+		
+		auto InputFloatSpin = [](const char* id, float* v, float step, float min_v, float max_v) -> bool {
+			ImGui::PushID(id);
+			ImGui::BeginGroup();
+			
+			// 数値ボックス本体
+			ImGui::SetNextItemWidth(45);
+			bool changed = ImGui::InputFloat("##num", v, 0.0f, 0.0f, "%.1f");
+			
+			ImGui::SameLine(0, 2);
+			
+			// 右側に割り振る上下ボタン群
+			ImGui::BeginGroup();
+			float frame_h = ImGui::GetFrameHeight();
+			float button_h = frame_h * 0.45f;
+			float button_w = 16.0f;
+			
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+			
+			// ボタンのリピート（長押し）フラグを有効化
+			ImGui::PushButtonRepeat(true);
+			
+			ImDrawList* draw_list = ImGui::GetWindowDrawList();
+			ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
+			
+			// 1. 上ボタン (+)
+			ImVec2 p_up = ImGui::GetCursorScreenPos();
+			if (ImGui::Button("##up", ImVec2(button_w, button_h))) {
+				*v += step;
+				changed = true;
+			}
+			ImVec2 center_up(p_up.x + button_w * 0.5f, p_up.y + button_h * 0.5f);
+			draw_list->AddLine(ImVec2(center_up.x - 3.0f, center_up.y), ImVec2(center_up.x + 3.0f, center_up.y), text_col, 1.0f);
+			draw_list->AddLine(ImVec2(center_up.x, center_up.y - 3.0f), ImVec2(center_up.x, center_up.y + 3.0f), text_col, 1.0f);
+			
+			// 2. 下ボタン (-)
+			ImVec2 p_dn = ImGui::GetCursorScreenPos();
+			if (ImGui::Button("##dn", ImVec2(button_w, button_h))) {
+				*v -= step;
+				changed = true;
+			}
+			ImVec2 center_dn(p_dn.x + button_w * 0.5f, p_dn.y + button_h * 0.5f);
+			draw_list->AddLine(ImVec2(center_dn.x - 3.0f, center_dn.y), ImVec2(center_dn.x + 3.0f, center_dn.y), text_col, 1.0f);
+			
+			// リピートフラグの状態を復元
+			ImGui::PopButtonRepeat();
+			
+			ImGui::PopStyleVar(2);
+			
+			ImGui::EndGroup();
+			ImGui::EndGroup();
+			ImGui::PopID();
+			
+			if (changed) {
+				*v = std::max(min_v, std::min(*v, max_v));
+			}
+			return changed;
+		};
+
+		// // 左側グループ（緯度・経度）
+		// ImGui::BeginGroup();
+		
+		// // 緯度線
+		// ImGui::Checkbox("##OutLatCheck", &d.out_show_latitude); ImGui::SameLine();
+		// ImGui::ColorEdit4("##Lat Color", (float*)&d.out_lat_color, ImGuiColorEditFlags_NoInputs); ImGui::SameLine();
+		// InputFloatSpin("LatThick", &d.out_lat_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		// ImGui::Text("Lat");
+
+		// // 経度線
+		// ImGui::Checkbox("##OutLonCheck", &d.out_show_longitude); ImGui::SameLine();
+		// ImGui::ColorEdit4("##Lon Color", (float*)&d.out_lon_color, ImGuiColorEditFlags_NoInputs); ImGui::SameLine();
+		// InputFloatSpin("LonThick", &d.out_lon_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		// ImGui::Text("Lon");
+		
+		// ImGui::EndGroup();
+		
+		// ImGui::SameLine(230); // チェックボックス追加に伴うアライメントのシフト
+		
+		// // 右側グループ（LST・アウトライン）
+		// ImGui::BeginGroup();
+		
+		// // LST線
+		// ImGui::Checkbox("##OutLSTCheck", &d.out_show_local_time); ImGui::SameLine();
+		// ImGui::ColorEdit4("##LST Color", (float*)&d.out_lst_color, ImGuiColorEditFlags_NoInputs); ImGui::SameLine();
+		// InputFloatSpin("LStThick", &d.out_lst_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		// ImGui::Text("LST");
+
+		// // 輪郭線（Outline）
+		// ImGui::Checkbox("##OutOutlineCheck", &d.out_show_outline); ImGui::SameLine();
+		// ImGui::ColorEdit4("##Outline Color", (float*)&d.out_outline_color, ImGuiColorEditFlags_NoInputs); ImGui::SameLine();
+		// InputFloatSpin("OutlineThick", &d.out_outline_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		// ImGui::Text("Outline");
+		
+		// ImGui::EndGroup();
+
+		ImGui::BeginGroup();
+		
+		// 緯度線
+		ImGui::Checkbox("##OutLatCheck", &d.out_show_latitude); ImGui::SameLine();
+		if (ImGui::ColorButton("##Lat Color", d.out_lat_color, ImGuiColorEditFlags_NoInputs)) {
+			ImGui::OpenPopup("LatColorPopup");
+		}
+		if (ImGui::BeginPopup("LatColorPopup")) {
+			ImGui::ColorPicker4("##LatPicker", (float*)&d.out_lat_color);
+			ImGui::Spacing();
+			if (ImGui::Button("Reset to Original")) {
+				d.out_lat_color = ImVec4(1.0f, 0.0f, 0.0f, 0.94f); // 初期設定値（赤）
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Close", ImVec2(-1, 0))) {
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::SameLine();
+		InputFloatSpin("LatThick", &d.out_lat_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		ImGui::Text("Lat");
+
+		// 経度線
+		ImGui::Checkbox("##OutLonCheck", &d.out_show_longitude); ImGui::SameLine();
+		if (ImGui::ColorButton("##Lon Color", d.out_lon_color, ImGuiColorEditFlags_NoInputs)) {
+			ImGui::OpenPopup("LonColorPopup");
+		}
+		if (ImGui::BeginPopup("LonColorPopup")) {
+			ImGui::ColorPicker4("##LonPicker", (float*)&d.out_lon_color);
+			ImGui::Spacing();
+			if (ImGui::Button("Reset to Original")) {
+				d.out_lon_color = ImVec4(1.0f, 0.0f, 0.0f, 0.94f); // 初期設定値（赤）
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Close", ImVec2(-1, 0))) {
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::SameLine();
+		InputFloatSpin("LonThick", &d.out_lon_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		ImGui::Text("Lon");
+		
+		ImGui::EndGroup();
+		
+		ImGui::SameLine(190);
+		
+		// 右側グループ（LST・アウトライン）
+		ImGui::BeginGroup();
+		
+		// LST線
+		ImGui::Checkbox("##OutLSTCheck", &d.out_show_local_time); ImGui::SameLine();
+		if (ImGui::ColorButton("##LST Color", d.out_lst_color, ImGuiColorEditFlags_NoInputs)) {
+			ImGui::OpenPopup("LSTColorPopup");
+		}
+		if (ImGui::BeginPopup("LSTColorPopup")) {
+			ImGui::ColorPicker4("##LSTPicker", (float*)&d.out_lst_color);
+			ImGui::Spacing();
+			if (ImGui::Button("Reset to Original")) {
+				d.out_lst_color = ImVec4(0.96f, 0.51f, 0.13f, 0.94f); // 初期設定値（オレンジ）
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Close", ImVec2(-1, 0))) {
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::SameLine();
+		InputFloatSpin("LStThick", &d.out_lst_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		ImGui::Text("LST");
+
+		// 輪郭線（Outline）
+		ImGui::Checkbox("##OutOutlineCheck", &d.out_show_outline); ImGui::SameLine();
+		if (ImGui::ColorButton("##Outline Color", d.out_outline_color, ImGuiColorEditFlags_NoInputs)) {
+			ImGui::OpenPopup("OutlineColorPopup");
+		}
+		if (ImGui::BeginPopup("OutlineColorPopup")) {
+			ImGui::ColorPicker4("##OutlinePicker", (float*)&d.out_outline_color);
+			ImGui::Spacing();
+			if (ImGui::Button("Reset to Original")) {
+				d.out_outline_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f); // 初期設定値（グレー）
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Close", ImVec2(-1, 0))) {
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::SameLine();
+		InputFloatSpin("OutlineThick", &d.out_outline_thick, 0.1f, 0.1f, 10.0f); ImGui::SameLine();
+		ImGui::Text("Outline");
+		
+		ImGui::EndGroup();
+
+		ImGui::Spacing();
+
+		// 以下、ファイルエクスポートボタンロジック（変更なし）
+		if (ImGui::Button("Screenshot"))
+		{
+			std::string def_path = getTimestampedFileName("screenshot", ".png");
+			auto save_dialog = pfd::save_file("Select Screenshot Save Destination", def_path, { "PNG Files (*.png)", "*.png" });
+			std::string path = save_dialog.result();
+			
+			if (!path.empty())
+			{
+				GLFWwindow* current_window = glfwGetCurrentContext();
+				int w, h;
+				glfwGetFramebufferSize(current_window, &w, &h);
+				saveScreenshot(current_window, w, h, path);
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Grid (PNG)"))
+		{
+			std::string def_path = getTimestampedFileName("grid_" + std::string(body.label), ".png");
+			auto save_dialog = pfd::save_file("Select Grid PNG Save Destination", def_path, { "PNG Files (*.png)", "*.png" });
+			std::string path = save_dialog.result();
+
+			if (!path.empty())
+			{
+				saveGridOverlay(d, 1024, 1024, path);
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Grid (SVG)"))
+		{
+			std::string def_path = getTimestampedFileName("vector_grid_" + std::string(body.label), ".svg");
+			auto save_dialog = pfd::save_file("Select Grid SVG Save Destination", def_path, { "SVG Files (*.svg)", "*.svg" });
+			std::string path = save_dialog.result();
+
+			if (!path.empty())
+			{
+				saveGridVector(d, 1024, 1024, path);
+			}
+		}
 	}
 
 	ImGui::End();
@@ -2501,7 +3064,8 @@ double GetCurrentET()
 
 int main(int, char**)
 {
-	SetupMacOSBundlePath();
+	// SetupMacOSBundlePath();
+	SetupEnvironmentPath();
 	furnsh_c("kernels.tm");
 
 	bodies.resize(5);
