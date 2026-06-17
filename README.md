@@ -45,6 +45,9 @@ Jan 1, 1970 to Dec 31, 2120
 ### Ver 2.1
   - Displaying Planets considering flattening
 
+### Ver 2.2
+  - Implemented the screenshot (png) and grid (png and svg) output
+
 Kernel list is specified in `kernels.tm`. 
 Download them from `https://naif.jpl.nasa.gov/pub/naif/generic_kernels/`.
 
